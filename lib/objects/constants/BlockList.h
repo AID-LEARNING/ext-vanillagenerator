@@ -540,6 +540,5 @@
 #define TOPAZ_ORE MinecraftBlock(1004, 0)
 #define AMETHYSTE_ORE MinecraftBlock(1006, 0)
 #define RANDOM_ORE MinecraftBlock(1009, 0)
-#define XP_BUSH MinecraftBlock(1030, 3)
 
 #endif // EXT_VANILLAGENERATOR_LIB_POCKETMINE_BLOCKLIST_H_
