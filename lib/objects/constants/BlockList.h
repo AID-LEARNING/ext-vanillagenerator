@@ -535,5 +535,11 @@
 #define WHITE_TULIP MinecraftBlock(38, 6)
 #define WOOL MinecraftBlock(35, 0)
 #define YELLOW_GLAZED_TERRACOTTA MinecraftBlock(224, 2)
+#define TITAN_ORE MinecraftBlock(1000, 0)
+#define FLUORITE_ORE MinecraftBlock(1002, 0)
+#define TOPAZ_ORE MinecraftBlock(1004, 0)
+#define AMETHYSTE_ORE MinecraftBlock(1006, 0)
+#define RANDOM_ORE MinecraftBlock(1009, 0)
+#define XP_BUSH MinecraftBlock(1030, 3)
 
 #endif // EXT_VANILLAGENERATOR_LIB_POCKETMINE_BLOCKLIST_H_

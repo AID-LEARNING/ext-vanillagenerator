@@ -10,9 +10,15 @@ OrePopulator::OrePopulator() {
   AddOre(OreType{COAL_ORE, 0, 128, 16, 20});
   AddOre(OreType{IRON_ORE, 0, 64, 8, 20});
   AddOre(OreType{GOLD_ORE, 0, 32, 8, 2});
+  AddOre(OreType{TITAN_ORE, 0, 32, 8, 2});
   AddOre(OreType{REDSTONE_ORE, 0, 16, 7, 8});
   AddOre(OreType{DIAMOND_ORE, 0, 16, 7, 1});
   AddOre(OreType{LAPIS_LAZULI_ORE, 16, 16, 6, 1});
+  AddOre(OreType{EMERALD_ORE, 0, 15, 4, 1});
+  AddOre(OreType{RANDOM_ORE, 0, 7, 5, 1});
+  AddOre(OreType{FLUORITE_ORE, 0, 13, 2, 1});
+  AddOre(OreType{TOPAZ_ORE, 0, 12, 2, 1});
+  AddOre(OreType{AMETHYSTE_ORE, 0, 7, 2, 1});
 }
 
 void OrePopulator::Populate(ChunkManager &world, Random &random, int_fast32_t chunkX, int_fast32_t chunkZ) {
