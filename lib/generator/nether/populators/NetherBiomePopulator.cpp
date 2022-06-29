@@ -12,6 +12,7 @@ void NetherBiomePopulator::InitPopulators() {
 
 void NetherBiomePopulator::Populate(ChunkManager &world, Random &random, int_fast32_t chunkX, int_fast32_t chunkZ) {
   fireDecorator_.Populate(world, random, chunkX, chunkZ);
+    orePopulator_.Populate(world, random, chunkX, chunkZ);
   glowstoneDecorator_.Populate(world, random, chunkX, chunkZ);
   glowstoneDecorator2_.Populate(world, random, chunkX, chunkZ);
   brownMushroomDecorator_.Populate(world, random, chunkX, chunkZ);
