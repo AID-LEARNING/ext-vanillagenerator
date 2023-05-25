@@ -6,12 +6,12 @@
 class MinecraftBlock {
  public:
   MinecraftBlock(Block block);
-  MinecraftBlock(uint_fast16_t block, uint_fast8_t blockMeta) : blockId(block), meta(blockMeta) {}
+  MinecraftBlock(uint_fast16_t block, uint_fast8_t blockMeta) : blockTypeId(block), meta(blockMeta) {}
 
   /*
    * Returns the minecraft full block ids in unsigned int format.
    */
-  auto GetFullId() const -> uint_fast32_t;
+  auto GetStateId() const -> uint_fast32_t;
 
   /*
    * Returns the id for this item.
@@ -48,7 +48,7 @@ class MinecraftBlock {
   static uint_fast8_t writeLegacyHorizontalFacing(int facing);
   static uint_fast8_t writeVineBlockFacingMeta(int facing);
  private:
-  uint_fast16_t blockId;
+  uint_fast16_t blockTypeId;
   uint_fast8_t meta;
 };
 

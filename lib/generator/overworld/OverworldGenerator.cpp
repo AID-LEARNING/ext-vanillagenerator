@@ -132,7 +132,7 @@ void OverworldGenerator::GenerateChunkData(ChunkManager &world,
         id = 132;
       }
 
-      chunk->GetBiomeArray().Set(x, z, id);
+      chunk->GetBiomeArray().Set(x, 0, z, id);
 
       bool found = false;
       for (const auto &mappings : groundMap_) {
@@ -275,9 +275,9 @@ void OverworldGenerator::GenerateRawTerrain(ChunkManager &world, int_fast32_t ch
   int_fast32_t seaFill = DENSITY_FILL_SEA_MODE;
   double densityOffset = DENSITY_FILL_OFFSET;
 
-  auto stillWater = STILL_WATER.GetFullId();
-  auto water = WATER.GetFullId();
-  auto stone = STONE.GetFullId();
+  auto stillWater = STILL_WATER.GetStateId();
+  auto water = WATER.GetStateId();
+  auto stone = STONE.GetStateId();
 
   auto chunk = world.GetChunk(chunkX, chunkZ);
   for (int_fast32_t i = 0; i < 5 - 1; ++i) {

@@ -45,7 +45,7 @@ bool Lake::Generate(ChunkManager &world, Random &random, int_fast32_t sourceX, i
   auto chunk = world.GetChunk(sourceX >> 4, sourceZ >> 4);
   auto biomeArray = chunk->GetBiomeArray();
 
-  int_fast32_t biome = biomeArray.Get((sourceX + 8 + LAKE_MAX_DIAMETER / 2) & 0x0f, (sourceZ + 8 + LAKE_MAX_DIAMETER / 2) & 0x0f);
+  int_fast32_t biome = biomeArray.Get((sourceX + 8 + LAKE_MAX_DIAMETER / 2) & 0x0f, 0, (sourceZ + 8 + LAKE_MAX_DIAMETER / 2) & 0x0f);
   bool mycel_biome = biome == MUSHROOM_SHORE;
 
   for (int_fast32_t x = 0; x < LAKE_MAX_DIAMETER; ++x) {
@@ -74,7 +74,7 @@ bool Lake::Generate(ChunkManager &world, Random &random, int_fast32_t sourceX, i
             replaceType = block;
           }
         } else if (y == (LAKE_MAX_HEIGHT / 2 - 1)) {
-          biome = biomeArray.Get(x & 0x0f, z & 0x0f);
+          biome = biomeArray.Get(x & 0x0f, 0 & 0x0f, z & 0x0f);
           if (type_.GetId() == 9 && BiomeClimate::IsCold(biome, sourceX + x, y, sourceZ + z)) {
             type_ = ICE;
           }

@@ -71,7 +71,7 @@ void NetherGenerator::GenerateChunkData(ChunkManager &world, int_fast32_t chunkX
 
   for (int_fast32_t x = 0; x < 16; ++x) {
     for (int_fast32_t z = 0; z < 16; ++z) {
-      chunk->GetBiomeArray().Set(x, z, HELL);
+      chunk->GetBiomeArray().Set(x, 0,z, HELL);
       GenerateTerrainColumn(world, cx + x, cz + z, surface[x | z << 4], soulSand[x | z << 4], gravel[x | z << 4]);
     }
   }
@@ -106,9 +106,9 @@ void NetherGenerator::GenerateRawTerrain(ChunkManager &world, int_fast32_t chunk
               // any density higher than 0 is ground, any density lower or equal
               // to 0 is air (or lava if under the lava level).
               if (dens > 0) {
-                subChunk->set(m + (i << 2), yBlockPos, n + (j << 2), NETHERRACK.GetFullId());
+                subChunk->set(m + (i << 2), yBlockPos, n + (j << 2), NETHERRACK.GetStateId());
               } else if (l + (k << 3) < 32) {
-                subChunk->set(m + (i << 2), yBlockPos, n + (j << 2), STILL_LAVA.GetFullId());
+                subChunk->set(m + (i << 2), yBlockPos, n + (j << 2), STILL_LAVA.GetStateId());
               }
               // interpolation along z
               dens += (d10 - d9) / 4;
@@ -150,40 +150,40 @@ void NetherGenerator::GenerateTerrainColumn(ChunkManager &world,
 
   for (int_fast16_t y = 127; y >= 0; y--) {
     if (y <= random_.NextInt(5) || y >= 127 - random_.NextInt(5)) {
-      chunk->SetFullBlock(chunkBlockX, y, chunkBlockZ, BEDROCK.GetFullId());
+      chunk->setBlockStateId(chunkBlockX, y, chunkBlockZ, BEDROCK.GetStateId());
       continue;
     }
 
-    MinecraftBlock mat = chunk->GetFullBlock(chunkBlockX, y, chunkBlockZ);
-    if (mat == AIR.GetFullId()) {
+    MinecraftBlock mat = chunk->getBlockStateId(chunkBlockX, y, chunkBlockZ);
+    if (mat == AIR.GetStateId()) {
       deep = -1;
-    } else if (mat == NETHERRACK.GetFullId()) {
+    } else if (mat == NETHERRACK.GetStateId()) {
       if (deep == -1) {
         if (surfaceHeight <= 0) {
-          topMat = AIR.GetFullId();
-          groundMat = NETHERRACK.GetFullId();
+          topMat = AIR.GetStateId();
+          groundMat = NETHERRACK.GetStateId();
         } else if (y >= 60 && y <= 65) {
-          topMat = NETHERRACK.GetFullId();
-          groundMat = NETHERRACK.GetFullId();
+          topMat = NETHERRACK.GetStateId();
+          groundMat = NETHERRACK.GetStateId();
           if (gravel) {
-            topMat = GRAVEL.GetFullId();
-            groundMat = NETHERRACK.GetFullId();
+            topMat = GRAVEL.GetStateId();
+            groundMat = NETHERRACK.GetStateId();
           }
           if (soulSand) {
-            topMat = SOUL_SAND.GetFullId();
-            groundMat = SOUL_SAND.GetFullId();
+            topMat = SOUL_SAND.GetStateId();
+            groundMat = SOUL_SAND.GetStateId();
           }
         }
 
         deep = surfaceHeight;
         if (y >= 63) {
-          chunk->SetFullBlock(chunkBlockX, y, chunkBlockZ, topMat.GetFullId());
+          chunk->setBlockStateId(chunkBlockX, y, chunkBlockZ, topMat.GetStateId());
         } else {
-          chunk->SetFullBlock(chunkBlockX, y, chunkBlockZ, groundMat.GetFullId());
+          chunk->setBlockStateId(chunkBlockX, y, chunkBlockZ, groundMat.GetStateId());
         }
       } else if (deep > 0) {
         deep--;
-        chunk->SetFullBlock(chunkBlockX, y, chunkBlockZ, groundMat.GetFullId());
+        chunk->setBlockStateId(chunkBlockX, y, chunkBlockZ, groundMat.GetStateId());
       }
     }
   }

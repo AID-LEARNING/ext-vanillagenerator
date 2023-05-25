@@ -1,17 +1,22 @@
 #include <lib/objects/math/Facing.h>
 #include "MinecraftBlock.h"
 
+const uint_fast8_t INTERNAL_STATE_DATA_BITS = 8;
+
+const uint_fast8_t INTERNAL_STATE_DATA_MASK = (uint_fast8_t)(~(~0 << INTERNAL_STATE_DATA_BITS));
+
 MinecraftBlock::MinecraftBlock(Block block) {
-  blockId = block >> 4;
-  meta = block & 0xf;
+  blockTypeId = block >> INTERNAL_STATE_DATA_BITS;
+  meta = (meta ^ blockTypeId) & INTERNAL_STATE_DATA_MASK;
 }
 
-uint_fast32_t MinecraftBlock::GetFullId() const {
-  return (blockId << 4) | meta;
+uint_fast32_t MinecraftBlock::GetStateId() const {
+
+  return (blockTypeId << INTERNAL_STATE_DATA_BITS) | (meta ^ (blockTypeId & INTERNAL_STATE_DATA_MASK));
 }
 
 uint_fast16_t MinecraftBlock::GetId() const {
-  return blockId;
+  return blockTypeId;
 }
 
 uint_fast8_t MinecraftBlock::GetMeta() const {

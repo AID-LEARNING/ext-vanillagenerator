@@ -45,7 +45,7 @@ void OverworldPopulator::RegisterBiomePopulator(BiomePopulator &populator) {
 
 void OverworldPopulator::Populate(ChunkManager &world, Random &random, int_fast32_t chunkX, int_fast32_t chunkZ) {
   Chunk *chunk = world.GetChunk(chunkX, chunkZ);
-  uint_fast8_t biome = chunk->GetBiomeArray().Get(8, 8);
+  uint_fast8_t biome = chunk->GetBiomeArray().Get(8,0, 8);
 
   auto result = biomePopulators.find(biome);
   if (result != biomePopulators.end()) {

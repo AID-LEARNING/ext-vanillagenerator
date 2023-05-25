@@ -10,8 +10,8 @@ class Chunk {
 
   NormalBlockArrayContainer *GetSubChunk(uint_fast8_t y);
 
-  auto SetFullBlock(int_fast8_t x, int_fast16_t y, int_fast8_t z, Block block) -> void;
-  auto GetFullBlock(int_fast8_t x, int_fast16_t y, int_fast8_t z) -> Block;
+  auto setBlockStateId(int_fast8_t x, int_fast16_t y, int_fast8_t z, Block block) -> void;
+  auto getBlockStateId(int_fast8_t x, int_fast16_t y, int_fast8_t z) -> Block;
 
   auto GetHighestBlockAt(uint_fast8_t x, uint_fast8_t z) -> int_fast16_t;
 

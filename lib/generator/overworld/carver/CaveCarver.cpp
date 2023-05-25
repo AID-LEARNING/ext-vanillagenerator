@@ -205,23 +205,23 @@ void CaveCarver::addTunnel(int_fast64_t seed, int_fast32_t originChunkX, int_fas
 void CaveCarver::digBlock(Chunk *chunk, int_fast8_t currX, int_fast16_t currY, int_fast8_t currZ) {
   if (canReplaceBlock(chunk, currX, currY, currZ)) {
     if ((currY - 1) < caveLiquidAltitude) {
-      chunk->SetFullBlock(currX, currY, currZ, STILL_LAVA.GetFullId());
+      chunk->setBlockStateId(currX, currY, currZ, STILL_LAVA.GetStateId());
     } else {
-      chunk->SetFullBlock(currX, currY, currZ, AIR.GetFullId());
+      chunk->setBlockStateId(currX, currY, currZ, AIR.GetStateId());
 
       auto healY = static_cast<int_fast16_t>(currY - 1);
 
-      const MinecraftBlock &block = MinecraftBlock(chunk->GetFullBlock(currX, healY, currZ));
+      const MinecraftBlock &block = MinecraftBlock(chunk->getBlockStateId(currX, healY, currZ));
       if (block == DIRT && chunk->GetHighestBlockAt(currX, currZ) == healY) {
-        chunk->SetFullBlock(currX, healY, currZ, GRASS.GetFullId());
+        chunk->setBlockStateId(currX, healY, currZ, GRASS.GetStateId());
       }
     }
   }
 }
 
 bool CaveCarver::canReplaceBlock(Chunk *chunk, int_fast8_t currX, int_fast16_t currY, int_fast8_t currZ) {
-  const MinecraftBlock &block = MinecraftBlock(chunk->GetFullBlock(currX, currY, currZ));
-  const MinecraftBlock &blockAbove = MinecraftBlock(chunk->GetFullBlock(currX, currY, currZ));
+  const MinecraftBlock &block = MinecraftBlock(chunk->getBlockStateId(currX, currY, currZ));
+  const MinecraftBlock &blockAbove = MinecraftBlock(chunk->getBlockStateId(currX, currY, currZ));
 
   // Avoid damaging trees and digging out under trees.
   if (block.GetId() == 17 || block.GetId() == 18 || block.GetId() == 161 || block.GetId() == 162 || blockAbove.GetId() == 17 || blockAbove == 162) {
@@ -234,7 +234,10 @@ bool CaveCarver::canReplaceBlock(Chunk *chunk, int_fast8_t currX, int_fast16_t c
       const Vector3 &facingSide = unsafeCopy.GetSide(facing);
 
       if ((facingSide.GetFloorX() >= 0 && facingSide.GetFloorX() <= 15) && (facingSide.GetFloorZ() >= 0 && facingSide.GetFloorZ() <= 15)) {
-        const MinecraftBlock &blockFace = MinecraftBlock(chunk->GetFullBlock(static_cast<int_fast8_t>(facingSide.GetFloorX()), static_cast<int_fast16_t>(facingSide.GetFloorY()), static_cast<int_fast8_t>(facingSide.GetFloorZ())));
+        const MinecraftBlock &blockFace = MinecraftBlock(
+                chunk->getBlockStateId(static_cast<int_fast8_t>(facingSide.GetFloorX()),
+                                       static_cast<int_fast16_t>(facingSide.GetFloorY()),
+                                       static_cast<int_fast8_t>(facingSide.GetFloorZ())));
         if (IS_LIQUID(blockFace.GetId())) {
           return false;
         }

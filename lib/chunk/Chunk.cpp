@@ -20,10 +20,10 @@ NormalBlockArrayContainer *Chunk::GetSubChunk(uint_fast8_t y) {
   return blockLayer[y];
 }
 
-void Chunk::SetFullBlock(int_fast8_t x, int_fast16_t y, int_fast8_t z, Block block) {
+void Chunk::setBlockStateId(int_fast8_t x, int_fast16_t y, int_fast8_t z, Block block) {
   NormalBlockArrayContainer *subChunk;
   if ((subChunk = GetSubChunk(y >> 4)) == nullptr) {
-    throw std::invalid_argument("Subchunk y=" + std::to_string(y >> 4) + " was not found [SetFullBlock]");
+    throw std::invalid_argument("Subchunk y=" + std::to_string(y >> 4) + " was not found [setBlockStateId]");
   }
 
   subChunk->set(x, y & 0xf, z, block);
@@ -31,10 +31,10 @@ void Chunk::SetFullBlock(int_fast8_t x, int_fast16_t y, int_fast8_t z, Block blo
   chunkDirty = true;
 }
 
-Block Chunk::GetFullBlock(int_fast8_t x, int_fast16_t y, int_fast8_t z) {
+Block Chunk::getBlockStateId(int_fast8_t x, int_fast16_t y, int_fast8_t z) {
   BlockArrayContainer<Block> *subChunk;
   if ((subChunk = GetSubChunk(y >> 4)) == nullptr) {
-    throw std::invalid_argument("Subchunk y=" + std::to_string(y >> 4) + " was not found [GetFullBlock]");
+    throw std::invalid_argument("Subchunk y=" + std::to_string(y >> 4) + " was not found [getBlockStateId]");
   }
 
   return subChunk->get(x, y & 0x0f, z);
