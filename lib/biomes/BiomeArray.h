@@ -11,7 +11,7 @@ class BiomeArray {
   explicit BiomeArray(const gsl::span<const uint_fast8_t, BiomeArray::DATA_SIZE> &values);
 
   auto Get(uint8_t x, uint8_t y, uint8_t z) const -> uint_fast8_t;
-  auto Set(uint8_t x, uint8_t y, uint_fast8_t value) -> void;
+  auto Set(uint8_t x, uint8_t y, uint8_t z, uint_fast8_t value) -> void;
 
   [[nodiscard]] gsl::span<const uint_fast8_t, DATA_SIZE> GetRawData() const;
 
