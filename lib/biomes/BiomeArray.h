@@ -3,6 +3,7 @@
 
 #include <cstddef>
 #include <gsl/span>
+#include <cstdint>
 
 class BiomeArray {
  public:

@@ -12,7 +12,7 @@ uint8_t BiomeArray::Get(const uint8_t x, const uint8_t y, const uint8_t z) const
     return mValues[offset];
 }
 
-void BiomeArray::Set(const uint8_t x,  const uint8_t y,const uint8_t z, const uint8_t value) {
+void BiomeArray::Set(const uint8_t x, const uint8_t y,const uint8_t z, const uint_fast8_t value) {
     uint_fast8_t offset;
     Index(x, y, z, offset);
 
