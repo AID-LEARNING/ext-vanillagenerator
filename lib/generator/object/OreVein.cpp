@@ -1,37 +1,44 @@
 #include "OreVein.h"
 
 bool OreVein::Generate(ChunkManager &world, Random &random, int_fast32_t sourceX, int_fast32_t sourceY, int_fast32_t sourceZ) const {
-  double amount = oreType_.amount;
+  double clusterSize = oreType_.amount;
+
+  if (clusterSize == (double) 1.0 || clusterSize == (double) 2.0) {
+    world.SetBlockAt(sourceX, sourceY, sourceZ, oreType_.blockType);
+    return true;
+  }
+
   float angle = random.NextFloat() * (float) M_PI;
-  double dx1 = static_cast<double>(sourceX) + (sin(angle) * amount / 8.0F);
-  double dx2 = static_cast<double>(sourceX) - (sin(angle) * amount / 8.0F);
-  double dz1 = static_cast<double>(sourceZ) + (cos(angle) * amount / 8.0F);
-  double dz2 = static_cast<double>(sourceZ) - (cos(angle) * amount / 8.0F);
+  Vector2 offset = Math::getDirection2D(static_cast<double>(angle)).Multiply(clusterSize / 8.0F));
+  double dx1 = static_cast<double>(sourceX) + offset.y;
+  double dx2 = static_cast<double>(sourceX) - offset.y;
+  double dz1 = static_cast<double>(sourceZ) + offset.x;
+  double dz2 = static_cast<double>(sourceZ) - offset.x;
   double dy1 = sourceY + static_cast<double>(random.NextInt(3)) - 2;
   double dy2 = sourceY + static_cast<double>(random.NextInt(3)) - 2;
 
+
   bool succeeded = false;
 
-  for (int_fast32_t i = 0; i < amount; i++) {
-    double originX = dx1 + (dx2 - dx1) * i / amount;
-    double originY = dy1 + (dy2 - dy1) * i / amount;
-    double originZ = dz1 + (dz2 - dz1) * i / amount;
-    double q = random.NextFloat() * amount / 16.0;
-    double radiusH = (sin(static_cast<double>(i) * (float) M_PI / amount) + 1 * q + 1) / 2.0;
-    double radiusV = (sin(static_cast<double>(i) * (float) M_PI / amount) + 1 * q + 1) / 2.0;
-    for (int_fast32_t x = (int) (originX - radiusH); x <= (int) (originX + radiusH); x++) {
+  for (int_fast32_t i = 0; i < clusterSize; i++) {
+    double originX = dx1 + (dx2 - dx1) * i / clusterSize;
+    double originY = dy1 + (dy2 - dy1) * i / clusterSize;
+    double originZ = dz1 + (dz2 - dz1) * i / clusterSize;
+    double q = random.NextFloat() * clusterSize / 16.0;
+    double size = (sin(static_cast<double>(i) * (float) M_PI / clusterSize) + 1 * q + 1) / 2.0;
+    for (int_fast32_t x = (int) (originX - size); x <= (int) (originX + size); x++) {
       // scale the center of x to the range [-1, 1] within the circle
-      double squaredNormalizedX = NormalizedSquaredCoordinate(originX, radiusH, x);
+      double squaredNormalizedX = NormalizedSquaredCoordinate(originX, size, x);
 
       if (squaredNormalizedX >= 1) continue;
 
-      for (int_fast32_t y = (int) (originY - radiusV); y <= (int) (originY + radiusV); y++) {
-        double squaredNormalizedY = NormalizedSquaredCoordinate(originY, radiusV, y);
+      for (int_fast32_t y = (int) (originY - size); y <= (int) (originY + size); y++) {
+        double squaredNormalizedY = NormalizedSquaredCoordinate(originY, size, y);
 
         if (squaredNormalizedX + squaredNormalizedY >= 1) continue;
 
-        for (int_fast32_t z = (int) (originZ - radiusH); z <= (int) (originZ + radiusH); z++) {
-          double squaredNormalizedZ = NormalizedSquaredCoordinate(originZ, radiusH, z);
+        for (int_fast32_t z = (int) (originZ - size); z <= (int) (originZ + size); z++) {
+          double squaredNormalizedZ = NormalizedSquaredCoordinate(originZ, size, z);
           double normalized = squaredNormalizedX + squaredNormalizedY + squaredNormalizedZ;
 
           if (normalized < 1 && world.GetBlockAt(x, y, z)->GetTypeId() == oreType_.targetType) {

@@ -40,7 +40,7 @@ if (PHP_VANILLAGENERATOR != "no") {
     ADD_SOURCES(configure_module_dirname + "/lib/noise", "BukkitSimplexNoiseGenerator.cpp", "vanillagenerator");
     ADD_SOURCES(configure_module_dirname + "/lib/noise/octaves", "BukkitSimplexOctaveGenerator.cpp PerlinOctaveGenerator.cpp ScalableOctaves.cpp SimplexOctaveGenerator.cpp", "vanillagenerator");
     ADD_SOURCES(configure_module_dirname + "/lib/noise", "PerlinNoise.cpp SimplexNoise.cpp", "vanillagenerator");
-    ADD_SOURCES(configure_module_dirname + "/lib/objects/math", "Facing.cpp Math.cpp Vector3.cpp", "vanillagenerator");
+    ADD_SOURCES(configure_module_dirname + "/lib/objects/math", "Facing.cpp Math.cpp Vector3.cpp  Vector2.cpp ", "vanillagenerator");
     ADD_SOURCES(configure_module_dirname + "/lib/objects/blocks", "Block.cpp", "vanillagenerator");
     ADD_SOURCES(configure_module_dirname + "/lib/objects", "VanillaBiomeGrid.cpp", "vanillagenerator");
     ADD_SOURCES(configure_module_dirname + "/lib/objects/random", "Random.cpp", "vanillagenerator");

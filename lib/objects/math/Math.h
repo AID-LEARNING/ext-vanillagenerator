@@ -2,6 +2,8 @@
 #define EXT_VANILLAGENERATOR_LIB_VANILLA_UTILS_H_
 
 #include <cstdint>
+#include <cmath>
+#include "Vector2.h"
 
 #define M_PI 3.14159265358979323846
 
@@ -22,6 +24,7 @@ class Math {
   static double Dot(const int8_t g[3], double x, double y);
 
   static double Dot(const int8_t g[3], double x, double y, double z);
+  static Vector2 getDirection2D(double azimuth);
 
   template<typename Y>
   static Y Min(const Y &num1, const Y &num2) {

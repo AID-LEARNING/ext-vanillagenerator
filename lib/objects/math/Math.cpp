@@ -1,4 +1,5 @@
 #include "Math.h"
+#include "Vector2.h"
 
 int Math::Floor(double x) {
   int floored = (int) x;
@@ -34,4 +35,8 @@ double Math::Dot(const int8_t g[3], double x, double y, double z) {
 
 long Math::FloorLong(double x) {
   return x >= 0 ? (long) x : (long) x - 1;
+}
+
+Vector2 Math::getDirection2D(double azimuth) {
+  return *new Vector2(cos(azimuth), sin(azimuth));
 }

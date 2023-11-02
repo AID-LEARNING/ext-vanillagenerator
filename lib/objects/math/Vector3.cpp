@@ -1,7 +1,6 @@
 #include <cmath>
 #include "Vector3.h"
 #include "Facing.h"
-
 Vector3 Vector3::GetSide(int_fast32_t side, int_fast32_t step) {
   switch (side) {
     case Facing::DOWN: return Vector3(x, y - step, z);
