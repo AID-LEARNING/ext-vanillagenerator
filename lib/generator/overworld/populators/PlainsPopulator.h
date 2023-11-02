@@ -12,9 +12,6 @@ class PlainsPopulator : public BiomePopulator {
 
   [[nodiscard]] std::vector<uint_fast8_t> GetBiomes() const override;
  private:
-  static const MinecraftBlock flowers[3];
-  static const MinecraftBlock tulips[4];
-
   Random internalRandom = {2345};
   SimplexOctaveGenerator noiseGen = {internalRandom, 1, 0, 0, 0};
 };

@@ -4,6 +4,8 @@
 #include <lib/generator/object/trees/defaults/BirchTree.h>
 #include "BiomePopulator.h"
 
+using namespace std;
+
 class ForestPopulator : public BiomePopulator {
  public:
   void InitPopulators() override;
@@ -16,8 +18,6 @@ class ForestPopulator : public BiomePopulator {
   BirchTree birchTree;
 
   int_fast32_t doublePlantLoweringAmount = 3;
-
-  const static MinecraftBlock blocks[3];
 };
 
 #endif //EXT_VANILLAGENERATOR_LIB_GENERATOR_POPULATORS_FORESTPOPULATOR_H_

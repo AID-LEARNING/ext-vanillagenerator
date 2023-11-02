@@ -13,10 +13,280 @@ extern "C" {
   #include <ext/spl/spl_exceptions.h>
 }
 
-static zend_object_handlers overworld_populator_handlers;
+PHP_METHOD (OverworldGenerator, __construct) {
+  zend_long seed;
+  zend_bool isUHC = false;
+
+  ZEND_PARSE_PARAMETERS_START_EX(ZEND_PARSE_PARAMS_THROW, 1, 2)
+	Z_PARAM_LONG(seed)
+	Z_PARAM_OPTIONAL
+	Z_PARAM_BOOL(isUHC)
+  ZEND_PARSE_PARAMETERS_END();
+
+  // Attempt to initialize PalettedBlockArray class entry, if it does not exist,
+  // it simply means that the server has no ext-chunkutils2 installed.
+  auto object = fetch_from_zend_object<overworld_generator>(Z_OBJ_P(getThis()));
+
+  zend_string *className = zend_string_init(ZEND_STRL(R"(\pocketmine\world\format\PalettedBlockArray)"), true);
+
+  zend_class_entry *ce;
+  if ((ce = zend_lookup_class(className)) != nullptr) {
+	object->paletted_block_entry_class = ce;
+  } else {
+	zend_string_release(className);
+
+	zend_throw_error(nullptr, "ext-chunkutils2 is required for ext-vanillagenerator to function correctly.");
+	RETURN_THROWS();
+  }
+
+  zend_string_release(className);
+
+  try {
+	object->overworldGenerator = new OverworldGenerator(seed, isUHC);
+  } catch (std::exception& e) {
+	zend_throw_exception_ex(spl_ce_RuntimeException, 0, "%s", e.what());
+  }
+}
+
+/**
+ *  @brief Generates terrains for the given chunk
+ *
+ *  It is important to understand that this generated terrain is not the same as terrain population,
+ *  terrain generation only takes 1 chunk area while terrain population can take up to 9 chunks (8 neighbouring
+ *  chunks).
+ */
+PHP_METHOD (OverworldGenerator, generateChunk) {
+  zval *blockArray;
+  zval *biomeArray;
+  zend_long morton;
+
+  ZEND_PARSE_PARAMETERS_START_EX(ZEND_PARSE_PARAMS_THROW, 3, 3)
+	Z_PARAM_ARRAY_EX2(blockArray, 1, 1, 0)
+	Z_PARAM_ARRAY_EX2(biomeArray, 1, 1, 0)
+	Z_PARAM_LONG(morton)
+  ZEND_PARSE_PARAMETERS_END();
+
+  auto storage = fetch_from_zend_object<overworld_generator>(Z_OBJ_P(getThis()));
+
+  zval *element;
+
+  BlockContainer blockContainers{};
+  BlockContainer biomeContainers{};
+
+  int id = 0;
+  ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(blockArray), element) {
+	// We only need an object of "PalettedBlockArray"
+	if (Z_TYPE_P(element) == IS_OBJECT && !instanceof_function(Z_OBJCE_P(element), storage->paletted_block_entry_class)) {
+	  zend_type_error("The array objects for $palettedArray must be an instanceof PalettedBlockArray");
+	  RETURN_THROWS();
+	}
+
+	try {
+	  auto object = fetch_from_zend_object<paletted_block_array_obj>(Z_OBJ_P(element));
+	  blockContainers.at(id++) = &object->container;
+	} catch(std::out_of_range const&) {
+	  zend_throw_error(nullptr, "The array objects for $palettedArray must contain exactly 24 PalettedBlockArray");
+	  return;
+	}
+  } ZEND_HASH_FOREACH_END();
+
+  id = 0;
+  ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(biomeArray), element) {
+	// We only need an object of "PalettedBlockArray"
+	if (Z_TYPE_P(element) != IS_OBJECT || !instanceof_function(Z_OBJCE_P(element), storage->paletted_block_entry_class)) {
+	  zend_type_error("The array objects for $biomeArray must be an instanceof PalettedBlockArray");
+	  RETURN_THROWS();
+	}
+
+	try {
+	  auto object = fetch_from_zend_object<paletted_block_array_obj>(Z_OBJ_P(element));
+	  biomeContainers.at(id++) = &object->container;
+	} catch(std::out_of_range const&) {
+	  zend_throw_error(nullptr, "The array objects for $biomeArray must contain exactly 24 PalettedBlockArray");
+	  return;
+	}
+  } ZEND_HASH_FOREACH_END();
+
+  auto biome = MCBiomeArray(biomeContainers);
+  auto chunk = Chunk(morton, blockContainers, biome);
+
+  auto chunkManager = ChunkManager(Chunk::Y_MIN, Chunk::Y_MAX);
+  chunkManager.SetChunk(chunk.GetX(), chunk.GetZ(), &chunk);
+
+  try {
+	storage->overworldGenerator->GenerateChunk(chunkManager, chunk.GetX(), chunk.GetZ());
+  } catch (std::exception &error) {
+	zend_throw_error(zend_ce_exception, "**INTERNAL GENERATOR ERROR** %s", error.what());
+	RETURN_THROWS();
+  }
+}
+
+PHP_METHOD (OverworldGenerator, populateChunk) {
+  zval *blockEntries;
+  zend_long morton;
+
+  ZEND_PARSE_PARAMETERS_START_EX(ZEND_PARSE_PARAMS_THROW, 2, 2)
+	Z_PARAM_ARRAY_EX2(blockEntries, 1, 1, 0)
+	Z_PARAM_LONG(morton)
+  ZEND_PARSE_PARAMETERS_END();
+
+  auto chunkManager = ChunkManager(Chunk::Y_MIN, Chunk::Y_MAX);
+  auto storage = fetch_from_zend_object<overworld_generator>(Z_OBJ_P(getThis()));
+
+  // hash -> BlockContainer
+  std::map<uint_fast64_t, BlockContainer> blockParsedEntries{};
+  std::map<uint_fast64_t, BlockContainer> biomeParsedEntries{};
+  std::map<uint_fast64_t, bool> dirtyParsedEntries{};
+
+  // We need to allocate the map of objects so that they are allocated inside the stack,
+  // later they will be deallocated after the method goes out of scope.
+  // Maybe we can improve this by having these objects initialized first then reuse in a thread local heap?
+  std::map<uint_fast64_t, Chunk> blocksEntries{};
+  std::map<uint_fast64_t, MCBiomeArray> biomesEntries{};
+
+  // Parse objects from a multidimensional blockEntries array.
+
+  zval *parent_element;
+  uint_fast64_t parent_hash;
+
+  zval *element;
+  zend_string *chunk_key;
+  zend_ulong chunk_hash;
+  ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(blockEntries), parent_element) {
+	if (Z_TYPE_P(parent_element) != IS_ARRAY) {
+	  zend_type_error("The array key parameter does not satisfy the required elements for a chunk population.");
+	  RETURN_THROWS();
+	}
+
+	zval *actual_hash = zend_hash_index_find(Z_ARRVAL_P(parent_element), 0);
+	zval *actual_elements = zend_hash_index_find(Z_ARRVAL_P(parent_element), 1);
+	zval *is_dirty = zend_hash_index_find(Z_ARRVAL_P(parent_element), 2);
+	if (!actual_hash || !actual_elements || !is_dirty || Z_TYPE_P(actual_hash) != IS_LONG || Z_TYPE_P(actual_elements) != IS_ARRAY || (Z_TYPE_P(is_dirty) != IS_FALSE && Z_TYPE_P(is_dirty) != IS_TRUE && Z_TYPE_P(is_dirty) != _IS_BOOL)) {
+	  zend_type_error("The first array value parameter requires 3 additional arrays.");
+	  RETURN_THROWS();
+	}
+
+	parent_hash = (uint_fast64_t) Z_LVAL_P(actual_hash);
+
+	zval *blocks = zend_hash_index_find(Z_ARRVAL_P(actual_elements), 0);
+	zval *biomes = zend_hash_index_find(Z_ARRVAL_P(actual_elements), 1);
+	if (!blocks || !biomes) {
+	  zend_type_error("The second array value parameter requires 2 additional arrays.");
+	  RETURN_THROWS();
+	}
+
+	blockParsedEntries.insert({parent_hash, {}});
+	biomeParsedEntries.insert({parent_hash, {}});
+	dirtyParsedEntries.insert({parent_hash, Z_TYPE_P(is_dirty) == IS_TRUE});
+
+	// The block array.
+	ZEND_HASH_FOREACH_KEY_VAL(Z_ARRVAL_P(blocks), chunk_hash, chunk_key, element) {
+	  if (Z_TYPE_P(element) != IS_OBJECT || !instanceof_function(Z_OBJCE_P(element), storage->paletted_block_entry_class)) {
+		zend_type_error("The first array of objects for chunk %llu must be an instanceof PalettedBlockArray.", parent_hash);
+		RETURN_THROWS();
+	  }
+
+	  auto object = fetch_from_zend_object<paletted_block_array_obj>(Z_OBJ_P(element));
+	  blockParsedEntries.at(parent_hash).at(chunk_hash) = &object->container;
+	} ZEND_HASH_FOREACH_END();
+
+	// The biome array.
+	ZEND_HASH_FOREACH_KEY_VAL(Z_ARRVAL_P(biomes), chunk_hash, chunk_key, element) {
+	  if (Z_TYPE_P(element) != IS_OBJECT || !instanceof_function(Z_OBJCE_P(element), storage->paletted_block_entry_class)) {
+		zend_type_error("The second array of objects for chunk %llu must be an instanceof PalettedBlockArray.", parent_hash);
+		RETURN_THROWS();
+	  }
+
+	  auto object = fetch_from_zend_object<paletted_block_array_obj>(Z_OBJ_P(element));
+	  biomeParsedEntries.at(parent_hash).at(chunk_hash) = &object->container;
+	} ZEND_HASH_FOREACH_END();
+
+	biomesEntries.insert({parent_hash, biomeParsedEntries.at(parent_hash)});
+	blocksEntries.insert({parent_hash, {parent_hash, blockParsedEntries.at(parent_hash), biomesEntries.at(parent_hash)}});
+
+	auto &chunk = blocksEntries.at(parent_hash);
+	chunk.SetDirty(dirtyParsedEntries.at(parent_hash));
+
+	chunkManager.SetChunk(chunk.GetX(), chunk.GetZ(), &chunk);
+  } ZEND_HASH_FOREACH_END();
+
+  try {
+	auto generator = storage->overworldGenerator;
+
+	int_fast32_t chunkX, chunkZ;
+	morton2d_decode(morton, chunkX, chunkZ);
+
+	generator->PopulateChunk(chunkManager, chunkX, chunkZ);
+  } catch (std::exception &error) {
+	zend_throw_error(zend_ce_exception, "**INTERNAL GENERATOR ERROR** %s", error.what());
+	RETURN_THROWS();
+  }
+
+  const auto &chunks = chunkManager.GetChunks();
+
+  ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(blockEntries), parent_element) {
+	// Find the block hash, then cross-reference it with the chunk manager.
+	zval *actual_hash = zend_hash_index_find(Z_ARRVAL_P(parent_element), 0);
+	zval *zval_flag = zend_hash_index_find(Z_ARRVAL_P(parent_element), 2);
+
+	parent_hash = (uint_fast64_t) Z_LVAL_P(actual_hash);
+	if (chunks.count(parent_hash) == 0) {
+	  zend_throw_error(zend_ce_exception, "Chunk hash of %llu was not found in the array, this should never happen.", parent_hash);
+	  RETURN_THROWS();
+	}
+
+	ZVAL_BOOL(zval_flag, chunks.at(parent_hash)->IsDirty());
+  } ZEND_HASH_FOREACH_END();
+}
+
+PHP_METHOD (OverworldGenerator, registerBlock) {
+  zend_long blockStateId;
+  zend_long meta;
+  zend_long blockMetadata;
+
+  ZEND_PARSE_PARAMETERS_START_EX(ZEND_PARSE_PARAMS_THROW, 3, 3)
+	Z_PARAM_LONG(blockStateId)
+	Z_PARAM_LONG(meta)
+	Z_PARAM_LONG(blockMetadata)
+  ZEND_PARSE_PARAMETERS_END();
+
+  MCBlock::RegisterBlock(blockStateId, meta, blockMetadata);
+}
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_OverworldGenerator___construct, 0, 0, 1)
+  ZEND_ARG_TYPE_INFO(0, seed, IS_LONG, 0)
+  ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, isUHC, _IS_BOOL, 0, "false")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_OverworldGenerator_generateChunk, 0, 3, IS_VOID, 0)
+  ZEND_ARG_TYPE_INFO(1, blockArray, IS_ARRAY, 1)
+  ZEND_ARG_TYPE_INFO(1, biomeArray, IS_ARRAY, 1)
+  ZEND_ARG_TYPE_INFO(0, populatePosition, IS_LONG, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_OverworldGenerator_populateChunk, 0, 2, IS_VOID, 0)
+  ZEND_ARG_TYPE_INFO(1, blockEntries, IS_ARRAY, 1)
+  ZEND_ARG_TYPE_INFO(0, populatePosition, IS_LONG, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_OverworldGenerator_registerBlock, 0, 3, IS_VOID, 0)
+  ZEND_ARG_TYPE_INFO(0, blockStateId, IS_LONG, 0)
+  ZEND_ARG_TYPE_INFO(0, id, IS_LONG, 0)
+  ZEND_ARG_TYPE_INFO(0, blockMetadata, IS_LONG, 0)
+ZEND_END_ARG_INFO()
+
+zend_function_entry overworld_methods[] = {
+  PHP_ME(OverworldGenerator, __construct, arginfo_OverworldGenerator___construct, ZEND_ACC_PUBLIC | ZEND_ACC_CTOR)
+  PHP_ME(OverworldGenerator, populateChunk, arginfo_OverworldGenerator_populateChunk, ZEND_ACC_PUBLIC)
+  PHP_ME(OverworldGenerator, generateChunk, arginfo_OverworldGenerator_generateChunk, ZEND_ACC_PUBLIC)
+  PHP_ME(OverworldGenerator, registerBlock, arginfo_OverworldGenerator_registerBlock, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+  PHP_FE_END
+};
+
+static zend_object_handlers overworld_generator_handlers;
 
 static zend_object *generator_new(zend_class_entry *class_type) {
-  auto object = alloc_custom_zend_object<overworld_generator>(class_type, &overworld_populator_handlers);
+  auto object = alloc_custom_zend_object<overworld_generator>(class_type, &overworld_generator_handlers);
 
   return &object->std;
 }
@@ -28,299 +298,10 @@ static void generator_free(zend_object *obj) {
   zend_object_std_dtor(obj);
 }
 
-/**
- *  @brief The arguments of the OverworldGenerator class constructor.
- */
-ZEND_BEGIN_ARG_INFO_EX(arginfo_OverworldGenerator___construct, 0, 0, 1)
-  ZEND_ARG_TYPE_INFO(0, seed, IS_LONG, 0)
-  ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, isUHC, _IS_BOOL, 0, "false")
-ZEND_END_ARG_INFO()
-
-/**
- *  @brief This is the beginning of overworld generator class
- */
-PHP_METHOD (OverworldGenerator, __construct) {
-  zend_long seed;
-  zend_bool isUHC = false;
-  ZEND_PARSE_PARAMETERS_START_EX(ZEND_PARSE_PARAMS_THROW, 1, 2)
-  Z_PARAM_LONG(seed)
-  Z_PARAM_OPTIONAL
-  Z_PARAM_BOOL(isUHC)
-  ZEND_PARSE_PARAMETERS_END();
-
-  // Attempt to initialize PalettedBlockArray class entry, if it does not exist,
-  // it simply means that the server has no ext-chunkutils2 installed.
-  auto object = fetch_from_zend_object<overworld_generator>(Z_OBJ_P(getThis()));
-
-  zend_string *className = zend_string_init(ZEND_STRL(R"(\pocketmine\world\format\PalettedBlockArray)"), true);
-
-  zend_class_entry *ce;
-  if ((ce = zend_lookup_class(className)) != nullptr) {
-    object->paletted_block_entry_class = ce;
-  } else {
-    zend_string_release(className);
-
-    zend_throw_error(nullptr, "ext-chunkutils2 is required for ext-vanillagenerator to function correctly.");
-    RETURN_THROWS();
-  }
-
-  zend_string_release(className);
-
-  object->overworldGenerator = new OverworldGenerator(static_cast<int_fast64_t>(seed), isUHC);
-}
-
-/**
- *  @brief The arguments for the chunk terrain generation
- */
-ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_OverworldGenerator_generateChunk, 0, 3, IS_STRING, 0)
-  ZEND_ARG_TYPE_INFO(1, palettedArray, IS_ARRAY, 0)
-  ZEND_ARG_TYPE_INFO(0, biomeArray, IS_STRING, 0)
-  ZEND_ARG_TYPE_INFO(0, morton, IS_LONG, 0)
-ZEND_END_ARG_INFO()
-
-/**
- *  @brief Generates terrains for the given chunk
- *
- *  It is important to understand that this generated terrain is not the same as terrain population,
- *  terrain generation only takes 1 chunk area while terrain population can take up to 9 chunks (8 neighbouring
- *  chunks).
- */
-PHP_METHOD (OverworldGenerator, generateChunk) {
-  zval *palettedArray;
-  zend_string *biomeArray;
-  zend_long morton;
-  ZEND_PARSE_PARAMETERS_START_EX(ZEND_PARSE_PARAMS_THROW, 3, 3)
-  Z_PARAM_ARRAY_EX(palettedArray, 1, 1)
-  Z_PARAM_STR_EX(biomeArray, 1, 1)
-  Z_PARAM_LONG(morton)
-  ZEND_PARSE_PARAMETERS_END();
-
-  if (ZSTR_LEN(biomeArray) != BiomeArray::DATA_SIZE) {
-    zend_throw_exception_ex(spl_ce_InvalidArgumentException, 0, "Biome array is expected to be exactly %zu bytes, but got %zu bytes", BiomeArray::DATA_SIZE, ZSTR_LEN(biomeArray));
-    RETURN_THROWS();
-  }
-
-  gsl::span<const uint8_t, BiomeArray::DATA_SIZE> span(reinterpret_cast<const uint8_t *>(ZSTR_VAL(biomeArray)), BiomeArray::DATA_SIZE);
-
-  auto chunkManager = ChunkManager(Y_MIN, Y_MAX);
-  auto storage = fetch_from_zend_object<overworld_generator>(Z_OBJ_P(getThis()));
-
-  zval new_class;
-  zval *element;
-  zend_string *key;
-  zend_ulong hash;
-
-  std::array<NormalBlockArrayContainer *, 16> blockContainers{};
-  blockContainers.fill(nullptr);
-
-  zend_array *hashTable = Z_ARRVAL_P(palettedArray);
-  ZEND_HASH_FOREACH_KEY_VAL(hashTable, hash, key, element) {
-    bool isNull = Z_TYPE_P(element) == IS_NULL;
-    bool isObject = Z_TYPE_P(element) == IS_OBJECT;
-
-    if ((!isNull && !isObject) || (isObject && !instanceof_function(Z_OBJCE_P(element), storage->paletted_block_entry_class))) {
-      if (key == nullptr) {
-        zend_type_error(R"(The array index in key %lld of %lld must be of type \pocketmine\world\format\PalettedBlockArray|null, %s given)", hash, morton, zend_zval_type_name(element));
-      } else {
-        zend_type_error(R"(The array index in key '%s' of %lld must be of type \pocketmine\world\format\PalettedBlockArray|null, %s given)", key->val, morton, zend_zval_type_name(element));
-      }
-      RETURN_THROWS();
-    }
-
-    try {
-      if (!isNull) {
-        auto object = fetch_from_zend_object<paletted_block_array_obj>(Z_OBJ_P(element));
-        blockContainers.at(hash) = &object->container;
-      } else {
-        object_init_ex(&new_class, storage->paletted_block_entry_class);
-
-        auto object = fetch_from_zend_object<paletted_block_array_obj>(Z_OBJ_P(&new_class));
-        new (&object->container) NormalBlockArrayContainer((Block)0, 0);
-
-        blockContainers.at(hash) = &object->container;
-
-        if (key) {
-          zend_hash_update(hashTable, key, &new_class);
-        } else {
-          zend_hash_index_update(hashTable, hash, &new_class);
-        }
-      }
-    } catch(std::out_of_range const& exc) {
-      zend_throw_error(nullptr, "Array for PalettedBlockArray must have exactly 16 defined entries.");
-      return;
-    }
-  } ZEND_HASH_FOREACH_END();
-
-  auto biomeClass = BiomeArray(span);
-  auto chunk = new Chunk(static_cast<int64_t>(morton), blockContainers, biomeClass);
-
-  chunkManager.SetChunk(chunk->GetX(), chunk->GetZ(), chunk);
-
-  auto generator = storage->overworldGenerator;
-
-  try {
-    generator->GenerateChunk(chunkManager, chunk->GetX(), chunk->GetZ());
-  } catch (std::exception &error) {
-    zend_throw_error(zend_ce_exception, "**INTERNAL GENERATOR ERROR** %s", error.what());
-    RETURN_THROWS();
-  }
-
-  auto raw_array = chunk->GetBiomeArray().GetRawData();
-
-  RETURN_STRINGL(reinterpret_cast<const char*>(raw_array.data()), raw_array.size_bytes());
-}
-
-/**
- *  @brief The arguments for the chunk population function
- */
-ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_OverworldGenerator_populateChunk, 0, 4, IS_VOID, 0)
-  ZEND_ARG_TYPE_INFO(1, palettedArray, IS_ARRAY, 0)
-  ZEND_ARG_TYPE_INFO(0, biomeArray, IS_ARRAY, 0)
-  ZEND_ARG_TYPE_INFO(1, dirtyFlags, IS_ARRAY, 0)
-  ZEND_ARG_TYPE_INFO(0, morton, IS_LONG, 0)
-ZEND_END_ARG_INFO()
-
-/**
- *  @brief Populates the given chunk coordinates within its neighbouring chunks.
- *
- *  This implementation requires all neighbouring chunks with the size of 3x3.
- *  It will only populate the chunk coordinates and not its neighbouring chunks.
- */
-PHP_METHOD (OverworldGenerator, populateChunk) {
-  zval *palettedArray;
-  zval *biomeArray;
-  zval *dirtyFlags;
-  zend_long morton;
-  ZEND_PARSE_PARAMETERS_START_EX(ZEND_PARSE_PARAMS_THROW, 4, 4)
-  Z_PARAM_ARRAY_EX(palettedArray, 1, 1)
-  Z_PARAM_ARRAY_EX(biomeArray, 1, 1)
-  Z_PARAM_ARRAY_EX(dirtyFlags, 1, 1)
-  Z_PARAM_LONG(morton)
-  ZEND_PARSE_PARAMETERS_END();
-
-  auto chunkManager = ChunkManager(Y_MIN, Y_MAX);
-  auto storage = fetch_from_zend_object<overworld_generator>(Z_OBJ_P(getThis()));
-
-  int64_t chunkX, chunkZ;
-  morton2d_decode(morton, chunkX, chunkZ);
-
-  // First multidimensional array variables.
-  zval *parent_element;
-  zend_string *parent_key;
-  zend_ulong parent_hash;
-
-  // The real deal we are going to handle variables.
-  zval new_class;
-  zval *element;
-  zend_string *key;
-  zend_ulong hash;
-  ZEND_HASH_FOREACH_KEY_VAL(Z_ARRVAL_P(palettedArray), parent_hash, parent_key, parent_element) {
-    if (parent_key) {
-      zend_type_error("The array keys must be an integer, the keys must be a valid chunk coordinates for its SubChunks");
-      RETURN_THROWS();
-    } else if (Z_TYPE_P(parent_element) != IS_ARRAY) {
-      zend_type_error("The array value of index %lld must be an array.", parent_hash);
-      RETURN_THROWS();
-    } else {
-      std::array<NormalBlockArrayContainer *, 16> blockContainers{};
-      blockContainers.fill(nullptr);
-
-      zend_array *hashTable = Z_ARRVAL_P(parent_element);
-      ZEND_HASH_FOREACH_KEY_VAL(hashTable, hash, key, element) {
-        bool isNull = Z_TYPE_P(element) == IS_NULL;
-        bool isObject = Z_TYPE_P(element) == IS_OBJECT;
-
-        if ((!isNull && !isObject) || (isObject && !instanceof_function(Z_OBJCE_P(element), storage->paletted_block_entry_class))) {
-          if (key == nullptr) {
-            zend_type_error(R"(The array index in key %lld of %lld must be of type \pocketmine\world\format\PalettedBlockArray|null, %s given)", hash, parent_hash, zend_zval_type_name(element));
-          } else {
-            zend_type_error(R"(The array index in key '%s' of %lld must be of type \pocketmine\world\format\PalettedBlockArray|null, %s given)", key->val, parent_hash, zend_zval_type_name(element));
-          }
-          RETURN_THROWS();
-        }
-
-        try {
-          if (!isNull) {
-            auto object = fetch_from_zend_object<paletted_block_array_obj>(Z_OBJ_P(element));
-            blockContainers.at(hash) = &object->container;
-          } else {
-            object_init_ex(&new_class, storage->paletted_block_entry_class);
-
-            auto object = fetch_from_zend_object<paletted_block_array_obj>(Z_OBJ_P(&new_class));
-            new (&object->container) NormalBlockArrayContainer((Block)0, 0);
-
-            blockContainers.at(hash) = &object->container;
-
-            if (key) {
-              zend_hash_update(hashTable, key, &new_class);
-            } else {
-              zend_hash_index_update(hashTable, hash, &new_class);
-            }
-          }
-        } catch(std::out_of_range const& exc) {
-          zend_throw_error(nullptr, "Array for PalettedBlockArray must have exactly 16 defined entries.");
-          return;
-        }
-      } ZEND_HASH_FOREACH_END();
-
-      zval* biome_array = zend_hash_index_find(Z_ARRVAL_P(biomeArray), parent_hash);
-      zval* hash_index = zend_hash_index_find(Z_ARRVAL_P(dirtyFlags), parent_hash);
-
-      if (biome_array == nullptr) {
-        zend_throw_error(nullptr, "Chunk for hash %lld does not present in biome array.", parent_hash);
-        RETURN_THROWS();
-      } else if (hash_index == nullptr) {
-        zend_throw_error(nullptr, "Dirty flags for hash %lld does not present in dirty flags array.", parent_hash);
-        RETURN_THROWS();
-      } else if (Z_TYPE_P(biome_array) != IS_STRING) {
-        zend_throw_exception_ex(spl_ce_InvalidArgumentException, 0, "Biome array must be a string in index %lld, %s given", parent_hash, zend_zval_type_name(biome_array));
-        RETURN_THROWS();
-      } else if (Z_STRLEN_P(biome_array) != BiomeArray::DATA_SIZE) {
-        zend_throw_exception_ex(spl_ce_InvalidArgumentException, 0, "Biome array is expected to be exactly %zu bytes, but got %zu bytes", BiomeArray::DATA_SIZE, Z_STRLEN_P(biome_array));
-        RETURN_THROWS();
-      } else if (Z_TYPE_P(hash_index) != IS_FALSE && Z_TYPE_P(hash_index) != IS_TRUE && Z_TYPE_P(hash_index) != _IS_BOOL) {
-        zend_throw_exception_ex(spl_ce_InvalidArgumentException, 0, "Dirty flags must be a boolean in index %lld, %s given", parent_hash, zend_zval_type_name(hash_index));
-        RETURN_THROWS();
-      }
-
-      gsl::span<const uint_fast8_t, BiomeArray::DATA_SIZE> span(reinterpret_cast<const uint_fast8_t *>(Z_STR_P(biome_array)), BiomeArray::DATA_SIZE);
-
-      auto biomeClass = BiomeArray(span);
-      auto chunk = new Chunk(static_cast<int64_t>(parent_hash), blockContainers, biomeClass);
-      chunk->SetDirty(Z_TYPE_P(hash_index) == IS_TRUE);
-
-      chunkManager.SetChunk(chunk->GetX(), chunk->GetZ(), chunk);
-    }
-  } ZEND_HASH_FOREACH_END();
-
-  auto generator = storage->overworldGenerator;
-
-  try {
-    generator->PopulateChunk(chunkManager, static_cast<int_fast32_t>(chunkX), static_cast<int_fast32_t>(chunkZ));
-  } catch (std::exception &error) {
-    zend_throw_error(zend_ce_exception, "**INTERNAL GENERATOR ERROR** %s", error.what());
-    RETURN_THROWS();
-  }
-
-  zval boolObject;
-  for (auto x : chunkManager.GetChunks()) {
-    ZVAL_BOOL(&boolObject, x.second->IsDirty());
-
-    zend_hash_index_update(Z_ARRVAL_P(dirtyFlags), static_cast<zend_long>(x.first), &boolObject);
-  }
-}
-
-zend_function_entry overworld_methods[] = {
-  PHP_ME(OverworldGenerator, __construct, arginfo_OverworldGenerator___construct, ZEND_ACC_PUBLIC | ZEND_ACC_CTOR)
-  PHP_ME(OverworldGenerator, populateChunk, arginfo_OverworldGenerator_populateChunk, ZEND_ACC_PUBLIC)
-  PHP_ME(OverworldGenerator, generateChunk, arginfo_OverworldGenerator_generateChunk, ZEND_ACC_PUBLIC)
-  PHP_FE_END
-};
-
 void register_overworld_generator() {
-  memcpy(&overworld_populator_handlers, zend_get_std_object_handlers(), sizeof(zend_object_handlers));
-  overworld_populator_handlers.offset = XtOffsetOf(overworld_generator, std);
-  overworld_populator_handlers.free_obj = generator_free;
+  memcpy(&overworld_generator_handlers, zend_get_std_object_handlers(), sizeof(zend_object_handlers));
+  overworld_generator_handlers.offset = XtOffsetOf(overworld_generator, std);
+  overworld_generator_handlers.free_obj = generator_free;
 
   zend_class_entry cle;
   INIT_CLASS_ENTRY(cle, "OverworldGenerator", overworld_methods);

@@ -3,7 +3,7 @@
 void TallRedwoodTree::Initialize(Random &random, BlockTransaction &txn) {
   RedwoodTree::Initialize(random, txn);
 
-  SetOverrides({0, 18, 2, 3, 17, 162, 6, 106});
+  SetOverrides({BlockIds::AIR, BlockIds::BIRCH_LEAVES, BlockIds::ACACIA_LEAVES, BlockIds::GRASS, BlockIds::DIRT, BlockIds::BIRCH_LOG, BlockIds::ACACIA_LOG, BlockIds::ACACIA_SAPLING, BlockIds::VINES});
   SetHeight(static_cast<int_fast32_t>(random.NextInt(5)) + 7);
   SetLeavesHeight(height - static_cast<int_fast32_t>(random.NextInt(2)) - 3);
   SetMaxRadius(static_cast<int_fast32_t>(random.NextInt(height - leavesHeight + 1)) + 1);
@@ -20,7 +20,7 @@ bool TallRedwoodTree::Generate(ChunkManager &world, Random &random, int_fast32_t
     // leaves are built from top to bottom
     for (int_fast32_t x = sourceX - radius; x <= sourceX + radius; x++) {
       for (int_fast32_t z = sourceZ - radius; z <= sourceZ + radius; z++) {
-        if ((abs(x - sourceX) != radius || abs(z - sourceZ) != radius || radius <= 0)  && world.GetBlockAt(x, y, z) == AIR) {
+        if ((abs(x - sourceX) != radius || abs(z - sourceZ) != radius || radius <= 0)  && world.GetBlockAt(x, y, z)->GetTypeId() == BlockIds::AIR) {
           transaction->AddBlockAt(x, y, z, leavesTypes);
         }
       }
@@ -38,7 +38,7 @@ bool TallRedwoodTree::Generate(ChunkManager &world, Random &random, int_fast32_t
   }
 
   // block below trunk is always dirt
-  transaction->AddBlockAt(sourceX, sourceY - 1, sourceZ, DIRT);
+  transaction->AddBlockAt(sourceX, sourceY - 1, sourceZ, MCBlock::GetBlockIdAndMeta(BlockIds::DIRT, 1));
 
   return true;
 }
