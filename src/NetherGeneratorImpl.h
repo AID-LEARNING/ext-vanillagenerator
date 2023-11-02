@@ -4,7 +4,7 @@
 #include <lib/generator/nether/NetherGenerator.h>
 
 typedef struct {
-  NetherGenerator *overworldGenerator;
+  NetherGenerator *netherGenerator;
   zend_class_entry *paletted_block_entry_class;
 
   zend_object std;
@@ -13,6 +13,7 @@ typedef struct {
 PHP_METHOD (NetherGenerator, __construct);
 PHP_METHOD (NetherGenerator, generateChunk);
 PHP_METHOD (NetherGenerator, populateChunk);
+PHP_METHOD (NetherGenerator, registerBlock);
 
 void register_nether_generator();
 

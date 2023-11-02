@@ -23,7 +23,7 @@ static zend_object *generator_new(zend_class_entry *class_type) {
 
 static void generator_free(zend_object *obj) {
   auto object = fetch_from_zend_object<nether_generator>(obj);
-  delete object->overworldGenerator;
+  delete object->netherGenerator;
 
   zend_object_std_dtor(obj);
 }
@@ -56,8 +56,23 @@ PHP_METHOD (NetherGenerator, __construct) {
 
   zend_string_release(className);
 
-  object->overworldGenerator = new NetherGenerator(static_cast<int_fast64_t>(seed));
+  object->netherGenerator = new NetherGenerator(static_cast<int_fast64_t>(seed));
 }
+
+PHP_METHOD (NetherGenerator, registerBlock) {
+    zend_long blockStateId;
+    zend_long meta;
+    zend_long blockMetadata;
+
+    ZEND_PARSE_PARAMETERS_START_EX(ZEND_PARSE_PARAMS_THROW, 3, 3)
+    Z_PARAM_LONG(blockStateId)
+    Z_PARAM_LONG(meta)
+    Z_PARAM_LONG(blockMetadata)
+    ZEND_PARSE_PARAMETERS_END();
+
+    MCBlock::RegisterBlock(blockStateId, meta, blockMetadata);
+}
+
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_NetherGenerator_generateChunk, 0, 3, IS_STRING, 0)
   ZEND_ARG_TYPE_INFO(1, palettedArray, IS_ARRAY, 0)
@@ -75,6 +90,12 @@ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_NetherGenerator_populateChunk, 0
   ZEND_ARG_TYPE_INFO(0, morton, IS_LONG, 0)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_NetherGeneratorr_registerBlock, 0, 3, IS_VOID, 0)
+    ZEND_ARG_TYPE_INFO(0, blockStateId, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, id, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, blockMetadata, IS_LONG, 0)
+ZEND_END_ARG_INFO()
+
 PHP_METHOD (NetherGenerator, populateChunk) {
 }
 
@@ -82,6 +103,7 @@ zend_function_entry nether_methods[] = {
     PHP_ME(NetherGenerator, __construct, arginfo_NetherGenerator___construct, ZEND_ACC_PUBLIC | ZEND_ACC_CTOR)
     PHP_ME(NetherGenerator, populateChunk, arginfo_NetherGenerator_populateChunk, ZEND_ACC_PUBLIC)
     PHP_ME(NetherGenerator, generateChunk, arginfo_NetherGenerator_generateChunk, ZEND_ACC_PUBLIC)
+    PHP_ME(NetherGenerator, registerBlock, arginfo_NetherGeneratorr_registerBlock, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
     PHP_FE_END
 };
 
